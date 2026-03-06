@@ -1,98 +1,187 @@
 from flask import Flask, jsonify, request, send_from_directory
 import pandas as pd
+import requests
+from io import BytesIO
 import os
 
-app = Flask(__name__, static_folder=".", static_url_path="")
+app = Flask(__name__)
 
-# caminhos dos arquivos
+# ================= LOGIN SHAREPOINT =================
+
+SP_USER = os.environ.get("SP_USER")
+SP_PASS = os.environ.get("SP_PASS")
+
+# ================= LINKS DOS EXCEL =================
+
 ARQUIVOS = {
-    "se": "dados/se.xlsx",
-    "rmt": "dados/rmt.xlsx",
-    "sda1": "dados/sda1.xlsx",
-    "sda2": "dados/sda2.xlsx",
-    "sda3": "dados/sda3.xlsx",
-    "sda4": "dados/sda4.xlsx",
-    "sda5": "dados/sda5.xlsx",
-    "sda6": "dados/sda6.xlsx"
+
+"se":"https://simmsa-my.sharepoint.com/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data%20book/DATABOOK%20SE/SDA-SIM-E-SERD-Q00-0001-00%20-%20%C3%8Dndice%20Data%20Book%20SE-11.09.25.xlsx",
+
+"rmt":"https://simmsa-my.sharepoint.com/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data%20book/DATABOOK%20RMT/SDA-SIM-E-MTRD-Q00-0155%20-%2000%20-%20%C3%8Dndice%20Data%20Book%20RMT-11.09.25.xlsx",
+
+"sda1":"https://simmsa-my.sharepoint.com/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data%20book/DATABOOK%20UFV/SDA%201/SDA-SIM-E-PVRD-Q00-0148-00%20-%20%C3%8Dndice%20Data%20Book%20UFV%20-%20SDA%201.xlsx",
+
+"sda2":"https://simmsa-my.sharepoint.com/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data%20book/DATABOOK%20UFV/SDA%202/SDA-SIM-E-PVRD-Q00-0148-00%20-%20%C3%8Dndice%20Data%20Book%20UFV%20-%20SDA%202.xlsx",
+
+"sda3":"https://simmsa-my.sharepoint.com/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data%20book/DATABOOK%20UFV/SDA%203/SDA-SIM-E-PVRD-Q00-0148-00%20-%20%C3%8Dndice%20Data%20Book%20UFV%20-%20SDA%203.xlsx",
+
+"sda4":"https://simmsa-my.sharepoint.com/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data%20book/DATABOOK%20UFV/SDA%204/SDA-SIM-E-PVRD-Q00-0148-00%20-%20%C3%8Dndice%20Data%20Book%20UFV%20-%20SDA%204.xlsx",
+
+"sda5":"https://simmsa-my.sharepoint.com/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data%20book/DATABOOK%20UFV/SDA%205/SDA-SIM-E-PVRD-Q00-0148-00%20-%20%C3%8Dndice%20Data%20Book%20UFV%20-%20SDA%205.xlsx",
+
+"sda6":"https://simmsa-my.sharepoint.com/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data%20book/DATABOOK%20UFV/SDA%206/SDA-SIM-E-PVRD-Q00-0148-00%20-%20%C3%8Dndice%20Data%20Book%20UFV%20-%20SDA%206.xlsx"
 }
 
+# ================= DOWNLOAD EXCEL =================
 
-def ler_planilha(path):
+def baixar_excel(url):
 
-    if not os.path.exists(path):
-        return {
-            "total": 0,
-            "postados": 0,
-            "tabela": []
-        }
+    r = requests.get(url, auth=(SP_USER, SP_PASS))
 
-    df = pd.read_excel(path)
+    if r.status_code != 200:
+        return None
 
-    total = len(df)
-    postados = df["POSTADOS"].sum() if "POSTADOS" in df.columns else 0
+    return BytesIO(r.content)
 
-    tabela = []
+# ================= LEITURA EXCEL =================
 
-    for _, r in df.iterrows():
+def carregar(nome,url):
 
-        tabela.append({
-            "item": r.get("ITEM", ""),
-            "setor": r.get("SETOR", ""),
-            "documento": r.get("DOCUMENTO", ""),
-            "total": r.get("TOTAL", ""),
-            "postados": r.get("POSTADOS", ""),
-            "comentario": r.get("COMENTARIO", ""),
-            "status": r.get("STATUS", "")
-        })
+    arquivo = baixar_excel(url)
 
-    return {
-        "total": int(total),
-        "postados": int(postados),
-        "tabela": tabela
-    }
+    if arquivo is None:
+        return None
 
+    if nome == "se":
+
+        df = pd.read_excel(
+            arquivo,
+            sheet_name="MC (S)",
+            usecols="B:J",
+            skiprows=6
+        )
+
+        df["Setor"] = ""
+
+    elif nome == "rmt":
+
+        df = pd.read_excel(
+            arquivo,
+            sheet_name="MC (R)",
+            usecols="B:J",
+            skiprows=6
+        )
+
+        df["Setor"] = ""
+
+    else:
+
+        df = pd.read_excel(
+            arquivo,
+            usecols="B:J",
+            skiprows=6
+        )
+
+    df.columns = df.columns.str.strip()
+
+    df = df[df["Item"].astype(str).str.match(r"^\d+\..*")]
+
+    df["Quantidade total"] = pd.to_numeric(
+        df["Quantidade total"], errors="coerce"
+    )
+
+    df["Postagem"] = pd.to_numeric(
+        df["Postagem"], errors="coerce"
+    ).fillna(0)
+
+    df = df.dropna(subset=["Quantidade total"])
+
+    return df
+
+# ================= ROTAS =================
 
 @app.route("/")
-def index():
+def home():
     return send_from_directory(".", "index.html")
 
+@app.route("/<path:arquivo>")
+def arquivos(arquivo):
+    return send_from_directory(".", arquivo)
+
+# ================= API =================
 
 @app.route("/dados")
+
 def dados():
 
-    sda = request.args.get("sda", "geral")
+    sda = request.args.get("sda","geral")
 
-    totais = 0
-    postados = 0
+    bases = {}
+
+    for nome,url in ARQUIVOS.items():
+
+        df = carregar(nome,url)
+
+        if df is not None:
+            bases[nome] = df
+
+    if not bases:
+        return jsonify({"erro":"Sem dados"})
+
+    geral = pd.concat(bases.values())
+
     sdas = {}
+
+    for nome,df in bases.items():
+
+        total = df["Quantidade total"].sum()
+        postados = df["Postagem"].sum()
+
+        porcentagem = round((postados/total)*100,1) if total>0 else 0
+
+        sdas[nome] = porcentagem
+
+    base = geral if sda=="geral" else bases.get(sda,geral)
+
+    total = int(base["Quantidade total"].sum())
+    postados = int(base["Postagem"].sum())
+
+    progresso = round((postados/total)*100,1) if total>0 else 0
+
     tabela = []
 
-    for nome, path in ARQUIVOS.items():
+    for _,r in base.iterrows():
 
-        d = ler_planilha(path)
+        status = "Finalizado"
 
-        totais += d["total"]
-        postados += d["postados"]
+        if r["Postagem"] == 0:
+            status = "Pendente"
 
-        progresso = 0
-        if d["total"] > 0:
-            progresso = round((d["postados"] / d["total"]) * 100)
+        elif r["Postagem"] < r["Quantidade total"]:
+            status = "Parcial"
 
-        sdas[nome] = progresso
+        if status != "Finalizado":
 
-        if nome == sda:
-            tabela = d["tabela"]
+            tabela.append({
 
-    progresso_geral = 0
-    if totais > 0:
-        progresso_geral = round((postados / totais) * 100)
+                "item":str(r["Item"]),
+                "setor":str(r.get("Setor","")),
+                "documento":str(r.get("Documento","")),
+                "total":int(r["Quantidade total"]),
+                "postados":int(r["Postagem"]),
+                "comentario":str(r.get("Observação","")),
+                "status":status
+
+            })
 
     return jsonify({
-        "total": totais,
-        "postados": postados,
-        "progresso": progresso_geral,
-        "sdas": sdas,
-        "tabela": tabela
+
+        "total":total,
+        "postados":postados,
+        "progresso":progresso,
+        "sdas":sdas,
+        "tabela":tabela
+
     })
 
 
