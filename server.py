@@ -1,70 +1,115 @@
 from flask import Flask, jsonify, request, send_from_directory
 import pandas as pd
-from pathlib import Path
+import requests
 import os
-
-from office365.sharepoint.client_context import ClientContext
-from office365.runtime.auth.user_credential import UserCredential
+from io import BytesIO
+from pathlib import Path
 
 app = Flask(__name__)
+
 BASE_DIR = Path(__file__).resolve().parent
 
-# ================= LOGIN SHAREPOINT =================
-SP_USER = os.getenv("SP_USER")
-SP_PASS = os.getenv("SP_PASS")
-SITE = "https://simmsa-my.sharepoint.com"
 
-ctx = ClientContext(SITE).with_credentials(
-    UserCredential(SP_USER, SP_PASS)
-)
+# ================= FRONTEND =================
 
-# ================= ARQUIVOS SHAREPOINT =================
+@app.route("/")
+def home():
+    return send_from_directory(BASE_DIR, "index.html")
+
+
+@app.route("/<path:arquivo>")
+def arquivos(arquivo):
+    return send_from_directory(BASE_DIR, arquivo)
+
+
+# ================= LINKS SHAREPOINT =================
+
 ARQUIVOS = {
 
-"rmt": "/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data book/DATABOOK RMT/SDA-SIM-E-MTRD-Q00-0155 - 00 - Índice Data Book RMT-11.09.25.xlsx",
+    "se": "https://simmsa-my.sharepoint.com/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data%20book/DATABOOK%20SE/SDA-SIM-E-SERD-Q00-0001-00%20-%20%C3%8Dndice%20Data%20Book%20SE-11.09.25.xlsx",
 
-"se": "/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data book/DATABOOK SE/SDA-SIM-E-SERD-Q00-0001-00 - Índice Data Book SE-11.09.25.xlsx",
+    "rmt": "https://simmsa-my.sharepoint.com/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data%20book/DATABOOK%20RMT/SDA-SIM-E-MTRD-Q00-0155%20-%2000%20-%20%C3%8Dndice%20Data%20Book%20RMT-11.09.25.xlsx",
 
-"sda1": "/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data book/DATABOOK UFV/SDA 1/SDA-SIM-E-PVRD-Q00-0148-00 - Índice Data Book UFV - SDA 1.xlsx",
+    "sda1": "https://simmsa-my.sharepoint.com/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data%20book/DATABOOK%20UFV/SDA%201/SDA-SIM-E-PVRD-Q00-0148-00%20-%20%C3%8Dndice%20Data%20Book%20UFV%20-%20SDA%201.xlsx",
 
-"sda2": "/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data book/DATABOOK UFV/SDA 2/SDA-SIM-E-PVRD-Q00-0148-00 - Índice Data Book UFV - SDA 2.xlsx",
+    "sda2": "https://simmsa-my.sharepoint.com/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data%20book/DATABOOK%20UFV/SDA%202/SDA-SIM-E-PVRD-Q00-0148-00%20-%20%C3%8Dndice%20Data%20Book%20UFV%20-%20SDA%202.xlsx",
 
-"sda3": "/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data book/DATABOOK UFV/SDA 3/SDA-SIM-E-PVRD-Q00-0148-00 - Índice Data Book UFV - SDA 3.xlsx",
+    "sda3": "https://simmsa-my.sharepoint.com/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data%20book/DATABOOK%20UFV/SDA%203/SDA-SIM-E-PVRD-Q00-0148-00%20-%20%C3%8Dndice%20Data%20Book%20UFV%20-%20SDA%203.xlsx",
 
-"sda4": "/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data book/DATABOOK UFV/SDA 4/SDA-SIM-E-PVRD-Q00-0148-00 - Índice Data Book UFV - SDA 4.xlsx",
+    "sda4": "https://simmsa-my.sharepoint.com/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data%20book/DATABOOK%20UFV/SDA%204/SDA-SIM-E-PVRD-Q00-0148-00%20-%20%C3%8Dndice%20Data%20Book%20UFV%20-%20SDA%204.xlsx",
 
-"sda5": "/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data book/DATABOOK UFV/SDA 5/SDA-SIM-E-PVRD-Q00-0148-00 - Índice Data Book UFV - SDA 5.xlsx",
+    "sda5": "https://simmsa-my.sharepoint.com/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data%20book/DATABOOK%20UFV/SDA%205/SDA-SIM-E-PVRD-Q00-0148-00%20-%20%C3%8Dndice%20Data%20Book%20UFV%20-%20SDA%205.xlsx",
 
-"sda6": "/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data book/DATABOOK UFV/SDA 6/SDA-SIM-E-PVRD-Q00-0148-00 - Índice Data Book UFV - SDA 6.xlsx"
-
+    "sda6": "https://simmsa-my.sharepoint.com/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data%20book/DATABOOK%20UFV/SDA%206/SDA-SIM-E-PVRD-Q00-0148-00%20-%20%C3%8Dndice%20Data%20Book%20UFV%20-%20SDA%206.xlsx"
 }
 
-# ================= BAIXAR EXCEL =================
 
-def baixar_excel(url, destino):
-    with open(destino, "wb") as f:
-        ctx.web.get_file_by_server_relative_url(url).download(f).execute_query()
+# ================= DOWNLOAD EXCEL =================
 
-# ================= LER EXCEL =================
+def baixar_excel(url):
 
-def carregar(url, chave):
+    user = os.getenv("SP_USER")
+    password = os.getenv("SP_PASS")
 
-    caminho = BASE_DIR / f"{chave}.xlsx"
+    r = requests.get(url, auth=(user, password))
 
-    baixar_excel(url, caminho)
+    if r.status_code != 200:
+        return None
 
-    df = pd.read_excel(
-        caminho,
-        usecols="B:J",
-        skiprows=6
-    )
+    return BytesIO(r.content)
+
+
+# ================= LEITURA EXCEL =================
+
+def carregar(nome, url):
+
+    arquivo = baixar_excel(url)
+
+    if arquivo is None:
+        return None
+
+
+    # SE
+    if nome == "se":
+
+        df = pd.read_excel(
+            arquivo,
+            sheet_name="MC (S)",
+            usecols="B:J",
+            skiprows=6
+        )
+
+
+    # RMT
+    elif nome == "rmt":
+
+        df = pd.read_excel(
+            arquivo,
+            sheet_name="MC (R)",
+            usecols="B:J",
+            skiprows=6
+        )
+
+
+    # SDA
+    else:
+
+        df = pd.read_excel(
+            arquivo,
+            usecols="B:J",
+            skiprows=6
+        )
+
 
     df.columns = df.columns.str.strip()
 
     df = df[df["Item"].astype(str).str.match(r"^\d+\..*")]
 
-    if "Setor" in df.columns:
-        df["Setor"] = df["Setor"].fillna("")
+    df = df[df["Documento"].notna()]
+
+    if "Setor" not in df.columns:
+        df["Setor"] = ""
+
 
     df["Quantidade total"] = pd.to_numeric(
         df["Quantidade total"], errors="coerce"
@@ -77,19 +122,11 @@ def carregar(url, chave):
     df = df.dropna(subset=["Quantidade total"])
 
     df["Quantidade total"] = df["Quantidade total"].astype(int)
+
     df["Postagem"] = df["Postagem"].astype(int)
 
     return df.reset_index(drop=True)
 
-# ================= ROTAS =================
-
-@app.route("/")
-def home():
-    return send_from_directory(BASE_DIR, "index.html")
-
-@app.route("/<path:arquivo>")
-def arquivos(arquivo):
-    return send_from_directory(BASE_DIR, arquivo)
 
 # ================= API =================
 
@@ -100,23 +137,28 @@ def dados():
 
     dados = {}
 
-    for chave, url in ARQUIVOS.items():
-        try:
-            dados[chave] = carregar(url, chave)
-        except:
-            pass
+    for nome, url in ARQUIVOS.items():
+
+        df = carregar(nome, url)
+
+        if df is not None:
+            dados[nome] = df
+
 
     if not dados:
-        return jsonify({"erro": "Nenhum arquivo encontrado"})
+        return jsonify({"erro": "Falha ao acessar SharePoint"})
+
 
     df_geral = pd.concat(dados.values()).reset_index(drop=True)
 
-    # progresso por SDA
+
+    # progresso por card
     sdas = {}
 
     for nome, df in dados.items():
 
         total = df["Quantidade total"].sum()
+
         postados = df["Postagem"].sum()
 
         porcentagem = round(
@@ -125,20 +167,22 @@ def dados():
 
         sdas[nome] = porcentagem
 
-    # base ativa
+
     if sda == "geral":
         df_base = df_geral
     else:
         df_base = dados.get(sda, df_geral)
 
+
     total = int(df_base["Quantidade total"].sum())
+
     postados = int(df_base["Postagem"].sum())
 
     progresso = round(
         (postados / total) * 100, 1
     ) if total > 0 else 0
 
-    # status
+
     df_status = df_base.copy()
 
     df_status["Status"] = "Finalizado"
@@ -153,6 +197,7 @@ def dados():
 
     df_status = df_status[df_status["Status"] != "Finalizado"]
 
+
     tabela = []
 
     for _, r in df_status.iterrows():
@@ -160,14 +205,15 @@ def dados():
         tabela.append({
 
             "item": str(r["Item"]),
-            "setor": str(r.get("Setor", "")),
-            "documento": str(r.get("Documento", "")),
+            "setor": str(r["Setor"]),
+            "documento": str(r["Documento"]),
             "total": int(r["Quantidade total"]),
             "postados": int(r["Postagem"]),
             "comentario": "",
             "status": str(r["Status"])
 
         })
+
 
     return jsonify({
 
@@ -179,10 +225,8 @@ def dados():
 
     })
 
+
 # ================= START =================
 
 if __name__ == "__main__":
-
-    port = int(os.environ.get("PORT", 10000))
-
-    app.run(host="0.0.0.0", port=port)
+    app.run(debug=True)
