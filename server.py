@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 import pandas as pd
 import requests
 import os
@@ -14,30 +14,37 @@ PASS = os.getenv("SHAREPOINT_PASS")
 # ================= LINKS =================
 
 ARQUIVOS = {
-
     "se": os.getenv("LINK_SE"),
     "rmt": os.getenv("LINK_RMT"),
-
     "sda1": os.getenv("LINK_SDA1"),
     "sda2": os.getenv("LINK_SDA2"),
     "sda3": os.getenv("LINK_SDA3"),
     "sda4": os.getenv("LINK_SDA4"),
     "sda5": os.getenv("LINK_SDA5")
-
 }
 
-# ================= HOME =================
+# ================= FRONTEND =================
 
 @app.route("/")
 def home():
-    return "API online"
+    return send_from_directory(".", "index.html")
+
+@app.route("/script.js")
+def js():
+    return send_from_directory(".", "script.js")
+
+@app.route("/style.css")
+def css():
+    return send_from_directory(".", "style.css")
 
 # ================= DOWNLOAD EXCEL =================
 
 def baixar_excel(url):
 
-    try:
+    if not url:
+        return None
 
+    try:
         sessao = requests.Session()
         sessao.auth = (USER, PASS)
 
@@ -50,79 +57,29 @@ def baixar_excel(url):
         return BytesIO(r.content)
 
     except Exception as e:
-
-        print("Erro download:", e)
+        print("Erro:", e)
         return None
 
-# ================= LEITURA EXCEL =================
+# ================= LEITURA =================
 
 def carregar(url):
-
-    if not url:
-        return None
 
     arquivo = baixar_excel(url)
 
     if arquivo is None:
         return None
 
-    nome = url
-
     try:
 
-        # ================= SE =================
-        if "SERD" in nome:
+        df = pd.read_excel(
+            arquivo,
+            usecols="B:J",
+            skiprows=6
+        )
 
-            df = pd.read_excel(
-                arquivo,
-                sheet_name="MC (S)",
-                usecols="B:J",
-                skiprows=6
-            )
+        df.columns = df.columns.str.strip()
 
-            df.columns = df.columns.str.strip()
-
-            df = df[df["Item"].astype(str).str.match(r"^\d+\..*")]
-
-            df = df[df["Documento"].notna()]
-
-            df["Setor"] = ""
-
-        # ================= RMT =================
-        elif "MTRD" in nome:
-
-            df = pd.read_excel(
-                arquivo,
-                sheet_name="MC (R)",
-                usecols="B:J",
-                skiprows=6
-            )
-
-            df.columns = df.columns.str.strip()
-
-            df = df[df["Item"].astype(str).str.match(r"^\d+\..*")]
-
-            df = df[df["Documento"].notna()]
-
-            df["Setor"] = ""
-
-        # ================= SDA =================
-        else:
-
-            df = pd.read_excel(
-                arquivo,
-                usecols="B:J",
-                skiprows=6
-            )
-
-            df.columns = df.columns.str.strip()
-
-            df = df[df["Item"].astype(str).str.match(r"^\d+\..*")]
-
-            if "Setor" in df.columns:
-                df["Setor"] = df["Setor"].fillna("")
-
-        # ================= TRATAMENTO =================
+        df = df[df["Item"].astype(str).str.match(r"^\d+\..*")]
 
         df["Quantidade total"] = pd.to_numeric(
             df["Quantidade total"], errors="coerce"
@@ -158,33 +115,12 @@ def dados():
     if not dados:
         return jsonify({"erro": "Nenhum arquivo encontrado"})
 
-    # ================= BASE GERAL =================
-
     df_geral = pd.concat(dados.values()).reset_index(drop=True)
-
-    # ================= PROGRESSO POR SDA =================
-
-    sdas = {}
-
-    for nome, df in dados.items():
-
-        total = df["Quantidade total"].sum()
-        postados = df["Postagem"].sum()
-
-        porcentagem = round(
-            (postados / total) * 100, 1
-        ) if total > 0 else 0
-
-        sdas[nome] = porcentagem
-
-    # ================= BASE ATIVA =================
 
     if sda == "geral":
         df_base = df_geral
     else:
         df_base = dados.get(sda, df_geral)
-
-    # ================= KPI =================
 
     total = int(df_base["Quantidade total"].sum())
     postados = int(df_base["Postagem"].sum())
@@ -193,38 +129,15 @@ def dados():
         (postados / total) * 100, 1
     ) if total > 0 else 0
 
-    # ================= STATUS =================
-
-    df_status = df_base.copy()
-
-    df_status["Status"] = "Finalizado"
-
-    df_status.loc[df_status["Postagem"] == 0, "Status"] = "Pendente"
-
-    df_status.loc[
-        (df_status["Postagem"] > 0) &
-        (df_status["Postagem"] < df_status["Quantidade total"]),
-        "Status"
-    ] = "Parcial"
-
-    df_status = df_status[df_status["Status"] != "Finalizado"]
-
-    if "Observação" not in df_status.columns:
-        df_status["Observação"] = df_status["Status"]
-
     tabela = []
 
-    for _, r in df_status.iterrows():
+    for _, r in df_base.iterrows():
 
         tabela.append({
 
             "item": str(r["Item"]),
-            "setor": str(r.get("Setor", "")),
-            "documento": str(r.get("Documento", "")),
             "total": int(r["Quantidade total"]),
-            "postados": int(r["Postagem"]),
-            "comentario": str(r.get("Observação", "")),
-            "status": str(r["Status"])
+            "postados": int(r["Postagem"])
 
         })
 
@@ -233,12 +146,11 @@ def dados():
         "total": total,
         "postados": postados,
         "progresso": progresso,
-        "sdas": sdas,
         "tabela": tabela
 
     })
 
-# ================= START LOCAL =================
+# ================= START =================
 
 if __name__ == "__main__":
 
