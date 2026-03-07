@@ -1,46 +1,98 @@
 from flask import Flask, jsonify, request, send_from_directory
 import pandas as pd
-from io import BytesIO
 from pathlib import Path
+from io import BytesIO
 import os
-
-from office365.runtime.auth.user_credential import UserCredential
-from office365.sharepoint.client_context import ClientContext
+import requests
+from requests.auth import HTTPBasicAuth
 
 app = Flask(__name__)
 
 BASE_DIR = Path(__file__).resolve().parent
 
 
-# ================= LOGIN SHAREPOINT =================
+# ================= LOGIN =================
 
-USERNAME = os.environ.get("SP_USER")
-PASSWORD = os.environ.get("SP_PASS")
-
-SITE = "https://simmsa-my.sharepoint.com"
+USER = os.getenv("SHAREPOINT_USER")
+PASS = os.getenv("SHAREPOINT_PASS")
 
 
-def baixar_excel(link):
+# ================= LINKS =================
+
+ARQUIVOS = {
+
+"se": "https://simmsa-my.sharepoint.com/:x:/g/personal/valquiria_andrade_simmsolucoes_com_br/IQDxJXdzK5d5T7DgixafUwcyAR-WTUSEf6ukZfRvoT4urOI",
+
+"rmt": "https://simmsa-my.sharepoint.com/:x:/g/personal/valquiria_andrade_simmsolucoes_com_br/IQD-KltGair7Q4q6opKhRRsUASrSLN1jq2OPfni7DhoqJ9E",
+
+"sda1": "https://simmsa-my.sharepoint.com/:x:/g/personal/valquiria_andrade_simmsolucoes_com_br/IQDcTx8ePFbjSagZq263RIxlAU1UjnZVBdf_ik61AQoWTrw",
+
+"sda2": "https://simmsa-my.sharepoint.com/:x:/g/personal/valquiria_andrade_simmsolucoes_com_br/IQCEzUG4i0GZRZGOgNPz0JYlAdGfjU7ifBeVBR5ARP_IRJg",
+
+"sda3": "https://simmsa-my.sharepoint.com/:x:/g/personal/valquiria_andrade_simmsolucoes_com_br/IQAkLNHcirYbTarilGQEN_KUAcbWl_Q9K4186tz_Ak7soA0",
+
+"sda4": "https://simmsa-my.sharepoint.com/:x:/g/personal/valquiria_andrade_simmsolucoes_com_br/IQABItzokLRLQ4-XmGIgexo3AW5Gv1mwWWSeN7_YXNfelQM",
+
+"sda5": "https://simmsa-my.sharepoint.com/:x:/g/personal/valquiria_andrade_simmsolucoes_com_br/IQCIY1QTN0ClSagd2wkdDKAhAcu83tQTDvIkU0J_ooqn-OM",
+
+"sda6": "https://simmsa-my.sharepoint.com/:x:/g/personal/valquiria_andrade_simmsolucoes_com_br/IQBFDj0RBVPARKYzwKljEWy9AZcbvdc-aXptISOgiIySD7Y"
+}
+
+
+# ================= BAIXAR EXCEL =================
+
+def baixar_excel(url):
 
     try:
 
-        ctx = ClientContext(SITE).with_credentials(
-            UserCredential(USERNAME, PASSWORD)
+        r = requests.get(
+            url + "?download=1",
+            auth=HTTPBasicAuth(USER, PASS)
         )
 
-        response = BytesIO()
+        if r.status_code != 200:
+            return None
 
-        ctx.web.get_file_by_server_relative_url(link).download(response).execute_query()
+        return BytesIO(r.content)
 
-        response.seek(0)
-
-        return response
-
-    except Exception as e:
-
-        print("Erro SharePoint:", e)
-
+    except:
         return None
+
+
+# ================= LEITURA =================
+
+def carregar(url):
+
+    arquivo = baixar_excel(url)
+
+    if arquivo is None:
+        return None
+
+
+    df = pd.read_excel(
+        arquivo,
+        usecols="B:J",
+        skiprows=6
+    )
+
+    df.columns = df.columns.str.strip()
+
+    df = df[df["Item"].astype(str).str.match(r"^\d+\..*")]
+
+    df["Quantidade total"] = pd.to_numeric(
+        df["Quantidade total"], errors="coerce"
+    )
+
+    df["Postagem"] = pd.to_numeric(
+        df["Postagem"], errors="coerce"
+    ).fillna(0)
+
+    df = df.dropna(subset=["Quantidade total"])
+
+    df["Quantidade total"] = df["Quantidade total"].astype(int)
+    df["Postagem"] = df["Postagem"].astype(int)
+
+    return df.reset_index(drop=True)
 
 
 # ================= ROTAS =================
@@ -55,113 +107,6 @@ def arquivos(arquivo):
     return send_from_directory(BASE_DIR, arquivo)
 
 
-# ================= ARQUIVOS =================
-
-ARQUIVOS = {
-
-"se":"/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data book/DATABOOK SE/SDA-SIM-E-SERD-Q00-0001-00 - Índice Data Book SE-11.09.25.xlsx",
-
-"rmt":"/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data book/DATABOOK RMT/SDA-SIM-E-MTRD-Q00-0155 - 00 - Índice Data Book RMT-11.09.25.xlsx",
-
-"sda1":"/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data book/DATABOOK UFV/SDA 1/SDA-SIM-E-PVRD-Q00-0148-00 - Índice Data Book UFV - SDA 1.xlsx",
-
-"sda2":"/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data book/DATABOOK UFV/SDA 2/SDA-SIM-E-PVRD-Q00-0148-00 - Índice Data Book UFV - SDA 2.xlsx",
-
-"sda3":"/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data book/DATABOOK UFV/SDA 3/SDA-SIM-E-PVRD-Q00-0148-00 - Índice Data Book UFV - SDA 3.xlsx",
-
-"sda4":"/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data book/DATABOOK UFV/SDA 4/SDA-SIM-E-PVRD-Q00-0148-00 - Índice Data Book UFV - SDA 4.xlsx",
-
-"sda5":"/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data book/DATABOOK UFV/SDA 5/SDA-SIM-E-PVRD-Q00-0148-00 - Índice Data Book UFV - SDA 5.xlsx",
-
-"sda6":"/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data book/DATABOOK UFV/SDA 6/SDA-SIM-E-PVRD-Q00-0148-00 - Índice Data Book UFV - SDA 6.xlsx"
-
-}
-
-
-# ================= LEITURA EXCEL =================
-
-def carregar(nome):
-
-    arquivo = baixar_excel(ARQUIVOS[nome])
-
-    if arquivo is None:
-        return None
-
-
-    # ================= SE =================
-    if "SERD" in nome:
-
-        df = pd.read_excel(
-            arquivo,
-            sheet_name="MC (S)",
-            usecols="B:J",
-            skiprows=6
-        )
-
-        df.columns = df.columns.str.strip()
-
-        df = df[df["Item"].astype(str).str.match(r"^\d+\..*")]
-
-        df = df[df["Documento"].notna()]
-
-        df["Setor"] = ""
-
-
-    # ================= RMT =================
-    elif "MTRD" in nome:
-
-        df = pd.read_excel(
-            arquivo,
-            sheet_name="MC (R)",
-            usecols="B:J",
-            skiprows=6
-        )
-
-        df.columns = df.columns.str.strip()
-
-        df = df[df["Item"].astype(str).str.match(r"^\d+\..*")]
-
-        df = df[df["Documento"].notna()]
-
-        df["Setor"] = ""
-
-
-    # ================= SDA =================
-    else:
-
-        df = pd.read_excel(
-            arquivo,
-            usecols="B:J",
-            skiprows=6
-        )
-
-        df.columns = df.columns.str.strip()
-
-        df = df[df["Item"].astype(str).str.match(r"^\d+\..*")]
-
-        if "Setor" in df.columns:
-            df["Setor"] = df["Setor"].fillna("")
-
-
-    # ================= TRATAMENTO NUMÉRICO =================
-
-    df["Quantidade total"] = pd.to_numeric(
-        df["Quantidade total"], errors="coerce"
-    )
-
-    df["Postagem"] = pd.to_numeric(
-        df["Postagem"], errors="coerce"
-    ).fillna(0)
-
-    df = df.dropna(subset=["Quantidade total"])
-
-    df["Quantidade total"] = df["Quantidade total"].astype(int)
-
-    df["Postagem"] = df["Postagem"].astype(int)
-
-    return df.reset_index(drop=True)
-
-
 # ================= API =================
 
 @app.route("/dados")
@@ -169,8 +114,7 @@ def dados():
 
     sda = request.args.get("sda", "geral")
 
-    dados = {k: carregar(k) for k in ARQUIVOS}
-
+    dados = {k: carregar(v) for k, v in ARQUIVOS.items()}
     dados = {k: v for k, v in dados.items() if v is not None}
 
     if not dados:
@@ -180,19 +124,6 @@ def dados():
     df_geral = pd.concat(dados.values()).reset_index(drop=True)
 
 
-    sdas = {}
-
-    for nome, df in dados.items():
-
-        total = df["Quantidade total"].sum()
-
-        postados = df["Postagem"].sum()
-
-        porcentagem = round((postados / total) * 100, 1) if total > 0 else 0
-
-        sdas[nome] = porcentagem
-
-
     if sda == "geral":
         df_base = df_geral
     else:
@@ -200,10 +131,11 @@ def dados():
 
 
     total = int(df_base["Quantidade total"].sum())
-
     postados = int(df_base["Postagem"].sum())
 
-    progresso = round((postados / total) * 100, 1) if total > 0 else 0
+    progresso = round(
+        (postados / total) * 100, 1
+    ) if total > 0 else 0
 
 
     return jsonify({
@@ -211,11 +143,13 @@ def dados():
         "total": total,
         "postados": postados,
         "progresso": progresso,
-        "sdas": sdas,
+        "sdas": {},
         "tabela": []
 
     })
 
 
+# ================= START =================
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    app.run()
