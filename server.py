@@ -26,7 +26,7 @@ ARQUIVOS = {
 
 }
 
-# ================= TESTE API =================
+# ================= HOME =================
 
 @app.route("/")
 def home():
@@ -51,12 +51,15 @@ def baixar_excel(url):
 
     except Exception as e:
 
-        print("Erro:", e)
+        print("Erro download:", e)
         return None
 
 # ================= LEITURA EXCEL =================
 
 def carregar(url):
+
+    if not url:
+        return None
 
     arquivo = baixar_excel(url)
 
@@ -119,7 +122,7 @@ def carregar(url):
             if "Setor" in df.columns:
                 df["Setor"] = df["Setor"].fillna("")
 
-        # ================= TRATAMENTO NUMÉRICO =================
+        # ================= TRATAMENTO =================
 
         df["Quantidade total"] = pd.to_numeric(
             df["Quantidade total"], errors="coerce"
@@ -132,7 +135,6 @@ def carregar(url):
         df = df.dropna(subset=["Quantidade total"])
 
         df["Quantidade total"] = df["Quantidade total"].astype(int)
-
         df["Postagem"] = df["Postagem"].astype(int)
 
         return df.reset_index(drop=True)
@@ -160,7 +162,7 @@ def dados():
 
     df_geral = pd.concat(dados.values()).reset_index(drop=True)
 
-    # ================= PROGRESSO POR CARD =================
+    # ================= PROGRESSO POR SDA =================
 
     sdas = {}
 
@@ -236,7 +238,7 @@ def dados():
 
     })
 
-# ================= START SERVER =================
+# ================= START LOCAL =================
 
 if __name__ == "__main__":
 
