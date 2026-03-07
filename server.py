@@ -2,9 +2,23 @@ from flask import Flask, jsonify, request, send_from_directory
 import pandas as pd
 import requests
 from io import BytesIO
-import os
+from pathlib import Path
 
 app = Flask(__name__)
+
+BASE_DIR = Path(__file__).resolve().parent
+
+
+# ================= ROTAS =================
+
+@app.route("/")
+def home():
+    return send_from_directory(BASE_DIR, "index.html")
+
+
+@app.route("/<path:arquivo>")
+def arquivos(arquivo):
+    return send_from_directory(BASE_DIR, arquivo)
 
 
 # ================= LINKS SHAREPOINT =================
@@ -29,17 +43,18 @@ ARQUIVOS = {
 }
 
 
-# ================= DOWNLOAD EXCEL =================
+# ================= DOWNLOAD =================
 
 def baixar_excel(url):
 
     try:
 
         if "download=1" not in url:
+
             if "?" in url:
-                url = url + "&download=1"
+                url += "&download=1"
             else:
-                url = url + "?download=1"
+                url += "?download=1"
 
         r = requests.get(url, timeout=60)
 
@@ -57,13 +72,17 @@ def baixar_excel(url):
 
 # ================= LEITURA =================
 
-def carregar(nome, url):
+def carregar(nome):
+
+    url = ARQUIVOS[nome]
 
     arquivo = baixar_excel(url)
 
     if arquivo is None:
         return None
 
+
+    # ===== SE =====
 
     if nome == "se":
 
@@ -74,8 +93,16 @@ def carregar(nome, url):
             skiprows=6
         )
 
+        df.columns = df.columns.str.strip()
+
+        df = df[df["Item"].astype(str).str.match(r"^\d+\..*")]
+
+        df = df[df["Documento"].notna()]
+
         df["Setor"] = ""
 
+
+    # ===== RMT =====
 
     elif nome == "rmt":
 
@@ -86,8 +113,16 @@ def carregar(nome, url):
             skiprows=6
         )
 
+        df.columns = df.columns.str.strip()
+
+        df = df[df["Item"].astype(str).str.match(r"^\d+\..*")]
+
+        df = df[df["Documento"].notna()]
+
         df["Setor"] = ""
 
+
+    # ===== SDA =====
 
     else:
 
@@ -97,10 +132,13 @@ def carregar(nome, url):
             skiprows=6
         )
 
+        df.columns = df.columns.str.strip()
 
-    df.columns = df.columns.str.strip()
+        df = df[df["Item"].astype(str).str.match(r"^\d+\..*")]
 
-    df = df[df["Item"].astype(str).str.match(r"^\d+\..*")]
+        if "Setor" in df.columns:
+            df["Setor"] = df["Setor"].fillna("")
+
 
     df["Quantidade total"] = pd.to_numeric(df["Quantidade total"], errors="coerce")
 
@@ -108,101 +146,62 @@ def carregar(nome, url):
 
     df = df.dropna(subset=["Quantidade total"])
 
-    return df
+    df["Quantidade total"] = df["Quantidade total"].astype(int)
 
+    df["Postagem"] = df["Postagem"].astype(int)
 
-# ================= ROTAS =================
-
-@app.route("/")
-def home():
-    return send_from_directory(".", "index.html")
-
-
-@app.route("/<path:arquivo>")
-def arquivos(arquivo):
-    return send_from_directory(".", arquivo)
+    return df.reset_index(drop=True)
 
 
 # ================= API =================
 
 @app.route("/dados")
-
 def dados():
 
-    sda = request.args.get("sda","geral")
+    sda = request.args.get("sda", "geral")
 
-    bases = {}
+    dados = {k: carregar(k) for k in ARQUIVOS}
 
-    for nome, url in ARQUIVOS.items():
+    dados = {k: v for k, v in dados.items() if v is not None}
 
-        df = carregar(nome, url)
-
-        if df is not None:
-            bases[nome] = df
+    if not dados:
+        return jsonify({"erro": "Nenhum arquivo encontrado"})
 
 
-    if not bases:
-        return jsonify({"erro":"Sem dados"})
-
-
-    geral = pd.concat(bases.values())
+    df_geral = pd.concat(dados.values()).reset_index(drop=True)
 
 
     sdas = {}
 
-    for nome, df in bases.items():
+    for nome, df in dados.items():
 
         total = df["Quantidade total"].sum()
         postados = df["Postagem"].sum()
 
-        porcentagem = round((postados/total)*100,1) if total>0 else 0
+        porcentagem = round((postados / total) * 100, 1) if total > 0 else 0
 
         sdas[nome] = porcentagem
 
 
-    base = geral if sda == "geral" else bases.get(sda, geral)
-
-    total = int(base["Quantidade total"].sum())
-    postados = int(base["Postagem"].sum())
-
-    progresso = round((postados/total)*100,1) if total>0 else 0
+    if sda == "geral":
+        df_base = df_geral
+    else:
+        df_base = dados.get(sda, df_geral)
 
 
-    tabela = []
+    total = int(df_base["Quantidade total"].sum())
+    postados = int(df_base["Postagem"].sum())
 
-    for _, r in base.iterrows():
-
-        status = "Finalizado"
-
-        if r["Postagem"] == 0:
-            status = "Pendente"
-
-        elif r["Postagem"] < r["Quantidade total"]:
-            status = "Parcial"
-
-
-        if status != "Finalizado":
-
-            tabela.append({
-
-                "item":str(r["Item"]),
-                "setor":str(r.get("Setor","")),
-                "documento":str(r.get("Documento","")),
-                "total":int(r["Quantidade total"]),
-                "postados":int(r["Postagem"]),
-                "comentario":"",
-                "status":status
-
-            })
+    progresso = round((postados / total) * 100, 1) if total > 0 else 0
 
 
     return jsonify({
 
-        "total":total,
-        "postados":postados,
-        "progresso":progresso,
-        "sdas":sdas,
-        "tabela":tabela
+        "total": total,
+        "postados": postados,
+        "progresso": progresso,
+        "sdas": sdas,
+        "tabela": []
 
     })
 
