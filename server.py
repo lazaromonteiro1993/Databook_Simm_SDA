@@ -1,65 +1,59 @@
 from flask import Flask, jsonify, request, send_from_directory
 import pandas as pd
-from pathlib import Path
-from io import BytesIO
-import os
 import requests
-from requests.auth import HTTPBasicAuth
+import os
+from io import BytesIO
 
 app = Flask(__name__)
 
-BASE_DIR = Path(__file__).resolve().parent
 
-
-# ================= LOGIN =================
+# ================= LOGIN SHAREPOINT =================
 
 USER = os.getenv("SHAREPOINT_USER")
 PASS = os.getenv("SHAREPOINT_PASS")
 
 
-# ================= LINKS =================
+# ================= LINKS (Render Environment) =================
 
 ARQUIVOS = {
 
-"se": "https://simmsa-my.sharepoint.com/:x:/g/personal/valquiria_andrade_simmsolucoes_com_br/IQDxJXdzK5d5T7DgixafUwcyAR-WTUSEf6ukZfRvoT4urOI",
+    "se": os.getenv("LINK_SE"),
+    "rmt": os.getenv("LINK_RMT"),
 
-"rmt": "https://simmsa-my.sharepoint.com/:x:/g/personal/valquiria_andrade_simmsolucoes_com_br/IQD-KltGair7Q4q6opKhRRsUASrSLN1jq2OPfni7DhoqJ9E",
+    "sda1": os.getenv("LINK_SDA1"),
+    "sda2": os.getenv("LINK_SDA2"),
+    "sda3": os.getenv("LINK_SDA3"),
+    "sda4": os.getenv("LINK_SDA4"),
+    "sda5": os.getenv("LINK_SDA5")
 
-"sda1": "https://simmsa-my.sharepoint.com/:x:/g/personal/valquiria_andrade_simmsolucoes_com_br/IQDcTx8ePFbjSagZq263RIxlAU1UjnZVBdf_ik61AQoWTrw",
-
-"sda2": "https://simmsa-my.sharepoint.com/:x:/g/personal/valquiria_andrade_simmsolucoes_com_br/IQCEzUG4i0GZRZGOgNPz0JYlAdGfjU7ifBeVBR5ARP_IRJg",
-
-"sda3": "https://simmsa-my.sharepoint.com/:x:/g/personal/valquiria_andrade_simmsolucoes_com_br/IQAkLNHcirYbTarilGQEN_KUAcbWl_Q9K4186tz_Ak7soA0",
-
-"sda4": "https://simmsa-my.sharepoint.com/:x:/g/personal/valquiria_andrade_simmsolucoes_com_br/IQABItzokLRLQ4-XmGIgexo3AW5Gv1mwWWSeN7_YXNfelQM",
-
-"sda5": "https://simmsa-my.sharepoint.com/:x:/g/personal/valquiria_andrade_simmsolucoes_com_br/IQCIY1QTN0ClSagd2wkdDKAhAcu83tQTDvIkU0J_ooqn-OM",
-
-"sda6": "https://simmsa-my.sharepoint.com/:x:/g/personal/valquiria_andrade_simmsolucoes_com_br/IQBFDj0RBVPARKYzwKljEWy9AZcbvdc-aXptISOgiIySD7Y"
 }
 
 
-# ================= BAIXAR EXCEL =================
+# ================= DOWNLOAD EXCEL =================
 
 def baixar_excel(url):
 
     try:
 
-        r = requests.get(
-            url + "?download=1",
-            auth=HTTPBasicAuth(USER, PASS)
-        )
+        sessao = requests.Session()
+
+        sessao.auth = (USER, PASS)
+
+        r = sessao.get(url)
 
         if r.status_code != 200:
+            print("Erro download:", url)
             return None
 
         return BytesIO(r.content)
 
-    except:
+    except Exception as e:
+
+        print("Erro:", e)
         return None
 
 
-# ================= LEITURA =================
+# ================= LEITURA EXCEL =================
 
 def carregar(url):
 
@@ -68,43 +62,87 @@ def carregar(url):
     if arquivo is None:
         return None
 
+    nome = url
 
-    df = pd.read_excel(
-        arquivo,
-        usecols="B:J",
-        skiprows=6
-    )
+    try:
 
-    df.columns = df.columns.str.strip()
+        # ================= SE =================
+        if "SERD" in nome:
 
-    df = df[df["Item"].astype(str).str.match(r"^\d+\..*")]
+            df = pd.read_excel(
+                arquivo,
+                sheet_name="MC (S)",
+                usecols="B:J",
+                skiprows=6
+            )
 
-    df["Quantidade total"] = pd.to_numeric(
-        df["Quantidade total"], errors="coerce"
-    )
+            df.columns = df.columns.str.strip()
 
-    df["Postagem"] = pd.to_numeric(
-        df["Postagem"], errors="coerce"
-    ).fillna(0)
+            df = df[df["Item"].astype(str).str.match(r"^\d+\..*")]
 
-    df = df.dropna(subset=["Quantidade total"])
+            df = df[df["Documento"].notna()]
 
-    df["Quantidade total"] = df["Quantidade total"].astype(int)
-    df["Postagem"] = df["Postagem"].astype(int)
-
-    return df.reset_index(drop=True)
+            df["Setor"] = ""
 
 
-# ================= ROTAS =================
+        # ================= RMT =================
+        elif "MTRD" in nome:
 
-@app.route("/")
-def home():
-    return send_from_directory(BASE_DIR, "index.html")
+            df = pd.read_excel(
+                arquivo,
+                sheet_name="MC (R)",
+                usecols="B:J",
+                skiprows=6
+            )
+
+            df.columns = df.columns.str.strip()
+
+            df = df[df["Item"].astype(str).str.match(r"^\d+\..*")]
+
+            df = df[df["Documento"].notna()]
+
+            df["Setor"] = ""
 
 
-@app.route("/<path:arquivo>")
-def arquivos(arquivo):
-    return send_from_directory(BASE_DIR, arquivo)
+        # ================= SDA =================
+        else:
+
+            df = pd.read_excel(
+                arquivo,
+                usecols="B:J",
+                skiprows=6
+            )
+
+            df.columns = df.columns.str.strip()
+
+            df = df[df["Item"].astype(str).str.match(r"^\d+\..*")]
+
+            if "Setor" in df.columns:
+                df["Setor"] = df["Setor"].fillna("")
+
+
+        # ================= TRATAMENTO NUMÉRICO =================
+
+        df["Quantidade total"] = pd.to_numeric(
+            df["Quantidade total"], errors="coerce"
+        )
+
+        df["Postagem"] = pd.to_numeric(
+            df["Postagem"], errors="coerce"
+        ).fillna(0)
+
+        df = df.dropna(subset=["Quantidade total"])
+
+        df["Quantidade total"] = df["Quantidade total"].astype(int)
+
+        df["Postagem"] = df["Postagem"].astype(int)
+
+        return df.reset_index(drop=True)
+
+    except Exception as e:
+
+        print("Erro leitura:", e)
+        return None
 
 
 # ================= API =================
@@ -115,14 +153,36 @@ def dados():
     sda = request.args.get("sda", "geral")
 
     dados = {k: carregar(v) for k, v in ARQUIVOS.items()}
+
     dados = {k: v for k, v in dados.items() if v is not None}
 
     if not dados:
         return jsonify({"erro": "Nenhum arquivo encontrado"})
 
 
+    # ================= BASE GERAL =================
+
     df_geral = pd.concat(dados.values()).reset_index(drop=True)
 
+
+    # ================= PROGRESSO POR CARD =================
+
+    sdas = {}
+
+    for nome, df in dados.items():
+
+        total = df["Quantidade total"].sum()
+
+        postados = df["Postagem"].sum()
+
+        porcentagem = round(
+            (postados / total) * 100, 1
+        ) if total > 0 else 0
+
+        sdas[nome] = porcentagem
+
+
+    # ================= BASE ATIVA =================
 
     if sda == "geral":
         df_base = df_geral
@@ -130,7 +190,10 @@ def dados():
         df_base = dados.get(sda, df_geral)
 
 
+    # ================= KPI =================
+
     total = int(df_base["Quantidade total"].sum())
+
     postados = int(df_base["Postagem"].sum())
 
     progresso = round(
@@ -138,13 +201,51 @@ def dados():
     ) if total > 0 else 0
 
 
+    # ================= STATUS =================
+
+    df_status = df_base.copy()
+
+    df_status["Status"] = "Finalizado"
+
+    df_status.loc[df_status["Postagem"] == 0, "Status"] = "Pendente"
+
+    df_status.loc[
+        (df_status["Postagem"] > 0) &
+        (df_status["Postagem"] < df_status["Quantidade total"]),
+        "Status"
+    ] = "Parcial"
+
+    df_status = df_status[df_status["Status"] != "Finalizado"]
+
+
+    if "Observação" not in df_status.columns:
+        df_status["Observação"] = df_status["Status"]
+
+
+    tabela = []
+
+    for _, r in df_status.iterrows():
+
+        tabela.append({
+
+            "item": str(r["Item"]),
+            "setor": str(r.get("Setor", "")),
+            "documento": str(r.get("Documento", "")),
+            "total": int(r["Quantidade total"]),
+            "postados": int(r["Postagem"]),
+            "comentario": str(r.get("Observação", "")),
+            "status": str(r["Status"])
+
+        })
+
+
     return jsonify({
 
         "total": total,
         "postados": postados,
         "progresso": progresso,
-        "sdas": {},
-        "tabela": []
+        "sdas": sdas,
+        "tabela": tabela
 
     })
 
@@ -152,4 +253,4 @@ def dados():
 # ================= START =================
 
 if __name__ == "__main__":
-    app.run()
+    app.run(debug=True)
