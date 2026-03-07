@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, request
 import pandas as pd
 import requests
 import os
@@ -6,14 +6,12 @@ from io import BytesIO
 
 app = Flask(__name__)
 
-
 # ================= LOGIN SHAREPOINT =================
 
 USER = os.getenv("SHAREPOINT_USER")
 PASS = os.getenv("SHAREPOINT_PASS")
 
-
-# ================= LINKS (Render Environment) =================
+# ================= LINKS =================
 
 ARQUIVOS = {
 
@@ -28,6 +26,11 @@ ARQUIVOS = {
 
 }
 
+# ================= TESTE API =================
+
+@app.route("/")
+def home():
+    return "API online"
 
 # ================= DOWNLOAD EXCEL =================
 
@@ -36,7 +39,6 @@ def baixar_excel(url):
     try:
 
         sessao = requests.Session()
-
         sessao.auth = (USER, PASS)
 
         r = sessao.get(url)
@@ -51,7 +53,6 @@ def baixar_excel(url):
 
         print("Erro:", e)
         return None
-
 
 # ================= LEITURA EXCEL =================
 
@@ -84,7 +85,6 @@ def carregar(url):
 
             df["Setor"] = ""
 
-
         # ================= RMT =================
         elif "MTRD" in nome:
 
@@ -103,7 +103,6 @@ def carregar(url):
 
             df["Setor"] = ""
 
-
         # ================= SDA =================
         else:
 
@@ -119,7 +118,6 @@ def carregar(url):
 
             if "Setor" in df.columns:
                 df["Setor"] = df["Setor"].fillna("")
-
 
         # ================= TRATAMENTO NUMÉRICO =================
 
@@ -144,7 +142,6 @@ def carregar(url):
         print("Erro leitura:", e)
         return None
 
-
 # ================= API =================
 
 @app.route("/dados")
@@ -159,11 +156,9 @@ def dados():
     if not dados:
         return jsonify({"erro": "Nenhum arquivo encontrado"})
 
-
     # ================= BASE GERAL =================
 
     df_geral = pd.concat(dados.values()).reset_index(drop=True)
-
 
     # ================= PROGRESSO POR CARD =================
 
@@ -172,7 +167,6 @@ def dados():
     for nome, df in dados.items():
 
         total = df["Quantidade total"].sum()
-
         postados = df["Postagem"].sum()
 
         porcentagem = round(
@@ -181,7 +175,6 @@ def dados():
 
         sdas[nome] = porcentagem
 
-
     # ================= BASE ATIVA =================
 
     if sda == "geral":
@@ -189,17 +182,14 @@ def dados():
     else:
         df_base = dados.get(sda, df_geral)
 
-
     # ================= KPI =================
 
     total = int(df_base["Quantidade total"].sum())
-
     postados = int(df_base["Postagem"].sum())
 
     progresso = round(
         (postados / total) * 100, 1
     ) if total > 0 else 0
-
 
     # ================= STATUS =================
 
@@ -217,10 +207,8 @@ def dados():
 
     df_status = df_status[df_status["Status"] != "Finalizado"]
 
-
     if "Observação" not in df_status.columns:
         df_status["Observação"] = df_status["Status"]
-
 
     tabela = []
 
@@ -238,7 +226,6 @@ def dados():
 
         })
 
-
     return jsonify({
 
         "total": total,
@@ -249,8 +236,13 @@ def dados():
 
     })
 
-
-# ================= START =================
+# ================= START SERVER =================
 
 if __name__ == "__main__":
-    app.run(debug=True)
+
+    port = int(os.environ.get("PORT", 10000))
+
+    app.run(
+        host="0.0.0.0",
+        port=port
+    )
