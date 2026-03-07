@@ -1,12 +1,46 @@
 from flask import Flask, jsonify, request, send_from_directory
 import pandas as pd
-import requests
 from io import BytesIO
 from pathlib import Path
+import os
+
+from office365.runtime.auth.user_credential import UserCredential
+from office365.sharepoint.client_context import ClientContext
 
 app = Flask(__name__)
 
 BASE_DIR = Path(__file__).resolve().parent
+
+
+# ================= LOGIN SHAREPOINT =================
+
+USERNAME = os.environ.get("SP_USER")
+PASSWORD = os.environ.get("SP_PASS")
+
+SITE = "https://simmsa-my.sharepoint.com"
+
+
+def baixar_excel(link):
+
+    try:
+
+        ctx = ClientContext(SITE).with_credentials(
+            UserCredential(USERNAME, PASSWORD)
+        )
+
+        response = BytesIO()
+
+        ctx.web.get_file_by_server_relative_url(link).download(response).execute_query()
+
+        response.seek(0)
+
+        return response
+
+    except Exception as e:
+
+        print("Erro SharePoint:", e)
+
+        return None
 
 
 # ================= ROTAS =================
@@ -21,70 +55,41 @@ def arquivos(arquivo):
     return send_from_directory(BASE_DIR, arquivo)
 
 
-# ================= LINKS SHAREPOINT =================
+# ================= ARQUIVOS =================
 
 ARQUIVOS = {
 
-"se":"https://simmsa-my.sharepoint.com/:x:/g/personal/valquiria_andrade_simmsolucoes_com_br/IQBFDj0RBVPARKYzwKljEWy9AZcbvdc-aXptISOgiIySD7Y",
+"se":"/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data book/DATABOOK SE/SDA-SIM-E-SERD-Q00-0001-00 - Índice Data Book SE-11.09.25.xlsx",
 
-"rmt":"https://simmsa-my.sharepoint.com/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data%20book/DATABOOK%20RMT/SDA-SIM-E-MTRD-Q00-0155%20-%2000%20-%20%C3%8Dndice%20Data%20Book%20RMT-11.09.25.xlsx",
+"rmt":"/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data book/DATABOOK RMT/SDA-SIM-E-MTRD-Q00-0155 - 00 - Índice Data Book RMT-11.09.25.xlsx",
 
-"sda1":"https://simmsa-my.sharepoint.com/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data%20book/DATABOOK%20UFV/SDA%201/SDA-SIM-E-PVRD-Q00-0148-00%20-%20%C3%8Dndice%20Data%20Book%20UFV%20-%20SDA%201.xlsx",
+"sda1":"/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data book/DATABOOK UFV/SDA 1/SDA-SIM-E-PVRD-Q00-0148-00 - Índice Data Book UFV - SDA 1.xlsx",
 
-"sda2":"https://simmsa-my.sharepoint.com/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data%20book/DATABOOK%20UFV/SDA%202/SDA-SIM-E-PVRD-Q00-0148-00%20-%20%C3%8Dndice%20Data%20Book%20UFV%20-%20SDA%202.xlsx",
+"sda2":"/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data book/DATABOOK UFV/SDA 2/SDA-SIM-E-PVRD-Q00-0148-00 - Índice Data Book UFV - SDA 2.xlsx",
 
-"sda3":"https://simmsa-my.sharepoint.com/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data%20book/DATABOOK%20UFV/SDA%203/SDA-SIM-E-PVRD-Q00-0148-00%20-%20%C3%8Dndice%20Data%20Book%20UFV%20-%20SDA%203.xlsx",
+"sda3":"/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data book/DATABOOK UFV/SDA 3/SDA-SIM-E-PVRD-Q00-0148-00 - Índice Data Book UFV - SDA 3.xlsx",
 
-"sda4":"https://simmsa-my.sharepoint.com/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data%20book/DATABOOK%20UFV/SDA%204/SDA-SIM-E-PVRD-Q00-0148-00%20-%20%C3%8Dndice%20Data%20Book%20UFV%20-%20SDA%204.xlsx",
+"sda4":"/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data book/DATABOOK UFV/SDA 4/SDA-SIM-E-PVRD-Q00-0148-00 - Índice Data Book UFV - SDA 4.xlsx",
 
-"sda5":"https://simmsa-my.sharepoint.com/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data%20book/DATABOOK%20UFV/SDA%205/SDA-SIM-E-PVRD-Q00-0148-00%20-%20%C3%8Dndice%20Data%20Book%20UFV%20-%20SDA%205.xlsx",
+"sda5":"/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data book/DATABOOK UFV/SDA 5/SDA-SIM-E-PVRD-Q00-0148-00 - Índice Data Book UFV - SDA 5.xlsx",
 
-"sda6":"https://simmsa-my.sharepoint.com/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data%20book/DATABOOK%20UFV/SDA%206/SDA-SIM-E-PVRD-Q00-0148-00%20-%20%C3%8Dndice%20Data%20Book%20UFV%20-%20SDA%206.xlsx"
+"sda6":"/personal/valquiria_andrade_simmsolucoes_com_br/Documents/Data book/DATABOOK UFV/SDA 6/SDA-SIM-E-PVRD-Q00-0148-00 - Índice Data Book UFV - SDA 6.xlsx"
+
 }
 
 
-# ================= DOWNLOAD =================
-
-def baixar_excel(url):
-
-    try:
-
-        if "download=1" not in url:
-
-            if "?" in url:
-                url += "&download=1"
-            else:
-                url += "?download=1"
-
-        r = requests.get(url, timeout=60)
-
-        if r.status_code != 200:
-            print("Erro download:", url)
-            return None
-
-        return BytesIO(r.content)
-
-    except Exception as e:
-
-        print("Erro:", e)
-        return None
-
-
-# ================= LEITURA =================
+# ================= LEITURA EXCEL =================
 
 def carregar(nome):
 
-    url = ARQUIVOS[nome]
-
-    arquivo = baixar_excel(url)
+    arquivo = baixar_excel(ARQUIVOS[nome])
 
     if arquivo is None:
         return None
 
 
-    # ===== SE =====
-
-    if nome == "se":
+    # ================= SE =================
+    if "SERD" in nome:
 
         df = pd.read_excel(
             arquivo,
@@ -102,9 +107,8 @@ def carregar(nome):
         df["Setor"] = ""
 
 
-    # ===== RMT =====
-
-    elif nome == "rmt":
+    # ================= RMT =================
+    elif "MTRD" in nome:
 
         df = pd.read_excel(
             arquivo,
@@ -122,8 +126,7 @@ def carregar(nome):
         df["Setor"] = ""
 
 
-    # ===== SDA =====
-
+    # ================= SDA =================
     else:
 
         df = pd.read_excel(
@@ -140,9 +143,15 @@ def carregar(nome):
             df["Setor"] = df["Setor"].fillna("")
 
 
-    df["Quantidade total"] = pd.to_numeric(df["Quantidade total"], errors="coerce")
+    # ================= TRATAMENTO NUMÉRICO =================
 
-    df["Postagem"] = pd.to_numeric(df["Postagem"], errors="coerce").fillna(0)
+    df["Quantidade total"] = pd.to_numeric(
+        df["Quantidade total"], errors="coerce"
+    )
+
+    df["Postagem"] = pd.to_numeric(
+        df["Postagem"], errors="coerce"
+    ).fillna(0)
 
     df = df.dropna(subset=["Quantidade total"])
 
@@ -176,6 +185,7 @@ def dados():
     for nome, df in dados.items():
 
         total = df["Quantidade total"].sum()
+
         postados = df["Postagem"].sum()
 
         porcentagem = round((postados / total) * 100, 1) if total > 0 else 0
@@ -190,6 +200,7 @@ def dados():
 
 
     total = int(df_base["Quantidade total"].sum())
+
     postados = int(df_base["Postagem"].sum())
 
     progresso = round((postados / total) * 100, 1) if total > 0 else 0
