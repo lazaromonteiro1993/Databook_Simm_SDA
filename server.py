@@ -13,29 +13,30 @@ app = Flask(__name__)
 
 BASE_DIR = Path(__file__).parent
 
-
 # ================= PLANILHAS =================
+
+PASTA = BASE_DIR / "dashboard"
+PASTA.mkdir(exist_ok=True)
 
 ARQUIVOS = {
 
-"se": r"C:\Users\LazaroMonteiro\Downloads\dashboard\SDA-SIM-E-SERD-Q00-0001-00 - Índice Data Book SE-11.09.25.xlsx",
+"se": PASTA / "SDA-SIM-E-SERD-Q00-0001-00 - Índice Data Book SE-11.09.25.xlsx",
 
-"rmt": r"C:\Users\LazaroMonteiro\Downloads\dashboard\SDA-SIM-E-MTRD-Q00-0155 - 00 - Índice Data Book RMT-11.09.25.xlsx",
+"rmt": PASTA / "SDA-SIM-E-MTRD-Q00-0155 - 00 - Índice Data Book RMT-11.09.25.xlsx",
 
-"sda1": r"C:\Users\LazaroMonteiro\Downloads\dashboard\SDA-SIM-E-PVRD-Q00-0148-00 - Índice Data Book UFV - SDA 1.xlsx",
+"sda1": PASTA / "SDA-SIM-E-PVRD-Q00-0148-00 - Índice Data Book UFV - SDA 1.xlsx",
 
-"sda2": r"C:\Users\LazaroMonteiro\Downloads\dashboard\SDA-SIM-E-PVRD-Q00-0148-00 - Índice Data Book UFV - SDA 2.xlsx",
+"sda2": PASTA / "SDA-SIM-E-PVRD-Q00-0148-00 - Índice Data Book UFV - SDA 2.xlsx",
 
-"sda3": r"C:\Users\LazaroMonteiro\Downloads\dashboard\SDA-SIM-E-PVRD-Q00-0148-00 - Índice Data Book UFV - SDA 3.xlsx",
+"sda3": PASTA / "SDA-SIM-E-PVRD-Q00-0148-00 - Índice Data Book UFV - SDA 3.xlsx",
 
-"sda4": r"C:\Users\LazaroMonteiro\Downloads\dashboard\SDA-SIM-E-PVRD-Q00-0148-00 - Índice Data Book UFV - SDA 4.xlsx",
+"sda4": PASTA / "SDA-SIM-E-PVRD-Q00-0148-00 - Índice Data Book UFV - SDA 4.xlsx",
 
-"sda5": r"C:\Users\LazaroMonteiro\Downloads\dashboard\SDA-SIM-E-PVRD-Q00-0148-00 - Índice Data Book UFV - SDA 5.xlsx",
+"sda5": PASTA / "SDA-SIM-E-PVRD-Q00-0148-00 - Índice Data Book UFV - SDA 5.xlsx",
 
-"sda6": r"C:\Users\LazaroMonteiro\Downloads\dashboard\SDA-SIM-E-PVRD-Q00-0148-00 - Índice Data Book UFV - SDA 6.xlsx"
+"sda6": PASTA / "SDA-SIM-E-PVRD-Q00-0148-00 - Índice Data Book UFV - SDA 6.xlsx"
 
 }
-
 
 # ================= LER PLANILHA =================
 
