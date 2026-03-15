@@ -22,339 +22,200 @@ color:#243a5e;
 /* ===== DASHBOARD ===== */
 
 .dashboard{
-
 height:100vh;
-
 display:flex;
-
 flex-direction:column;
-
 padding:20px;
-
 box-sizing:border-box;
-
 max-width:1320px;
-
 margin:auto;
-
 }
 
 /* ===== TITULO ===== */
 
 .header{
-
 text-align:center;
-
 font-size:40px;
-
 font-weight:700;
-
 margin-bottom:10px;
+}
 
+/* ===== BOTAO PDF ===== */
+
+.botao-pdf{
+position:absolute;
+right:30px;
+top:25px;
+background:#2f4e83;
+color:white;
+border:none;
+padding:10px 18px;
+border-radius:8px;
+cursor:pointer;
+font-size:14px;
+}
+
+.botao-pdf:hover{
+background:#233e6c;
 }
 
 /* ===== KPI ===== */
 
 .cards{
-
 display:flex;
-
 gap:15px;
-
 margin-bottom:10px;
-
 }
 
 .card{
-
 background:white;
-
 flex:1;
-
 padding:16px;
-
 border-radius:12px;
-
 box-shadow:0 6px 18px rgba(0,0,0,0.08);
-
 }
 
 .card span{
-
 font-size:13px;
-
 color:#6c7a8c;
-
 }
 
 .card h2{
-
 font-size:28px;
-
 margin:4px 0;
-
 }
 
 /* ===== BARRA KPI ===== */
 
 .barra{
-
 height:6px;
-
 background:#dfe6ef;
-
 border-radius:20px;
-
 margin-top:8px;
-
 }
 
 .barra-fill{
-
 height:6px;
-
 border-radius:20px;
-
 background:linear-gradient(90deg,#233e6c,#2f4e83);
-
 width:0%;
-
 }
 
 /* ===== TITULO SDA ===== */
 
 .linha-sda{
-
 text-align:center;
-
 margin:10px 0;
-
 font-weight:600;
-
 color:#2f4e83;
-
-position:relative;
-
 }
-
-.linha-sda::before,
-.linha-sda::after{
-
-content:"";
-
-position:absolute;
-
-top:50%;
-
-width:40%;
-
-height:1px;
-
-background:#cfd6df;
-
-}
-
-.linha-sda::before{left:0;}
-.linha-sda::after{right:0;}
 
 /* ===== GRID SDA ===== */
 
 .sda{
-
 display:grid;
-
 grid-template-columns:repeat(9,1fr);
-
 gap:12px;
-
 margin-bottom:10px;
-
 }
 
 /* ===== CARD SDA ===== */
 
 .sda-card{
-
 background:white;
-
 padding:12px;
-
 border-radius:12px;
-
 text-align:center;
-
 box-shadow:0 4px 12px rgba(0,0,0,0.12);
-
 cursor:pointer;
-
-transition:0.25s;
-
 }
 
 .sda-card span{
-
 font-size:11px;
-
 color:#6c7a8c;
-
 }
 
 .sda-card strong{
-
 display:block;
-
 font-size:16px;
-
 margin-top:3px;
-
 }
 
 .sda-card.ativo{
-
 border:2px solid #2f4e83;
-
-box-shadow:0 8px 20px rgba(0,0,0,0.25);
-
 }
 
 /* ===== BARRA SDA ===== */
 
 .mini-bar{
-
 height:8px;
-
 background:linear-gradient(90deg,#233e6c,#2f4e83);
-
 border-radius:4px;
-
 margin-top:8px;
-
-box-shadow:0 3px 6px rgba(0,0,0,0.25);
-
-}
-
-.sda-base{
-
-height:2px;
-
-background:#d7dde6;
-
-margin-top:4px;
-
-border-radius:2px;
-
 }
 
 /* ===== TABELA ===== */
 
 .tabela{
-
 background:white;
-
 border-radius:12px;
-
 box-shadow:0 8px 20px rgba(0,0,0,0.08);
-
 display:flex;
-
 flex-direction:column;
-
 flex:1;
-
 overflow:hidden;
-
 }
-
-/* titulo curva */
 
 .titulo{
-
 background:linear-gradient(90deg,#2d466f,#3b5b8c);
-
 color:white;
-
 padding:12px 20px;
-
 font-weight:600;
-
 font-size:14px;
-
 width:420px;
-
 border-top-right-radius:40px;
-
 border-bottom-right-radius:40px;
-
 }
-
-/* scroll tabela */
 
 .tabela-scroll{
-
 flex:1;
-
 overflow-y:auto;
-
 }
 
-/* tabela */
-
 table{
-
 width:100%;
-
 border-collapse:collapse;
-
 font-size:13px;
-
 }
 
 th{
-
 background:#f5f7fb;
-
 padding:10px;
-
 text-align:left;
-
 }
 
 td{
-
 padding:8px;
-
 border-bottom:1px solid #edf1f5;
-
 }
 
-/* status */
+/* ===== STATUS ===== */
 
 .status{
-
 padding:3px 10px;
-
 border-radius:20px;
-
 font-size:12px;
-
 font-weight:600;
-
 }
 
 .pendente{
-
 background:#fdeaea;
-
 color:#c0392b;
-
 }
 
 .parcial{
-
 background:#fff3cd;
-
 color:#c48a00;
-
 }
 
 </style>
@@ -362,6 +223,10 @@ color:#c48a00;
 </head>
 
 <body>
+
+<button class="botao-pdf" onclick="baixarPDF()">
+Baixar PDF
+</button>
 
 <div class="dashboard">
 
@@ -396,7 +261,7 @@ UFV SOL DO AGRESTE
 </div>
 
 <div class="linha-sda">
-AVANÇO GERAL
+PROGRESSO POR SDA
 </div>
 
 <!-- SDA -->
@@ -407,63 +272,54 @@ AVANÇO GERAL
 <span>GERAL</span>
 <strong>0%</strong>
 <div class="mini-bar"></div>
-<div class="sda-base"></div>
 </div>
 
 <div class="sda-card" data-sda="se">
 <span>SE</span>
 <strong>0%</strong>
 <div class="mini-bar"></div>
-<div class="sda-base"></div>
 </div>
 
 <div class="sda-card" data-sda="rmt">
 <span>RMT</span>
 <strong>0%</strong>
 <div class="mini-bar"></div>
-<div class="sda-base"></div>
 </div>
 
 <div class="sda-card" data-sda="sda1">
 <span>SDA 1</span>
 <strong>0%</strong>
 <div class="mini-bar"></div>
-<div class="sda-base"></div>
 </div>
 
 <div class="sda-card" data-sda="sda2">
 <span>SDA 2</span>
 <strong>0%</strong>
 <div class="mini-bar"></div>
-<div class="sda-base"></div>
 </div>
 
 <div class="sda-card" data-sda="sda3">
 <span>SDA 3</span>
 <strong>0%</strong>
 <div class="mini-bar"></div>
-<div class="sda-base"></div>
 </div>
 
 <div class="sda-card" data-sda="sda4">
 <span>SDA 4</span>
 <strong>0%</strong>
 <div class="mini-bar"></div>
-<div class="sda-base"></div>
 </div>
 
 <div class="sda-card" data-sda="sda5">
 <span>SDA 5</span>
 <strong>0%</strong>
 <div class="mini-bar"></div>
-<div class="sda-base"></div>
 </div>
 
 <div class="sda-card" data-sda="sda6">
 <span>SDA 6</span>
 <strong>0%</strong>
 <div class="mini-bar"></div>
-<div class="sda-base"></div>
 </div>
 
 </div>
@@ -511,7 +367,6 @@ let sdaAtual="geral";
 async function carregar(){
 
 const res=await fetch("/dados?sda="+sdaAtual);
-
 const dados=await res.json();
 
 /* KPI */
@@ -583,6 +438,12 @@ carregar();
 };
 
 });
+
+/* ===== PDF ===== */
+
+function baixarPDF(){
+window.open("/baixar-pdf");
+}
 
 carregar();
 

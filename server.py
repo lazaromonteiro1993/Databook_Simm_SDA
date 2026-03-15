@@ -1,96 +1,123 @@
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, send_from_directory, request
 import pandas as pd
-import requests
-import os
-from io import BytesIO
+from pathlib import Path
 
-# ================= APP =================
+# PDF
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.lib import colors
+from datetime import datetime
 
 app = Flask(__name__)
 
-# ================= SHAREPOINT =================
+BASE_DIR = Path(__file__).parent
 
-USER = os.getenv("SHAREPOINT_USER")
-PASS = os.getenv("SHAREPOINT_PASS")
 
-# ================= LINKS =================
+# ================= PLANILHAS =================
 
 ARQUIVOS = {
 
-    "se": os.getenv("LINK_SE"),
-    "rmt": os.getenv("LINK_RMT"),
+"se": r"C:\Users\LazaroMonteiro\Downloads\dashboard\SDA-SIM-E-SERD-Q00-0001-00 - Índice Data Book SE-11.09.25.xlsx",
 
-    "sda1": os.getenv("LINK_SDA1"),
-    "sda2": os.getenv("LINK_SDA2"),
-    "sda3": os.getenv("LINK_SDA3"),
-    "sda4": os.getenv("LINK_SDA4"),
-    "sda5": os.getenv("LINK_SDA5")
+"rmt": r"C:\Users\LazaroMonteiro\Downloads\dashboard\SDA-SIM-E-MTRD-Q00-0155 - 00 - Índice Data Book RMT-11.09.25.xlsx",
+
+"sda1": r"C:\Users\LazaroMonteiro\Downloads\dashboard\SDA-SIM-E-PVRD-Q00-0148-00 - Índice Data Book UFV - SDA 1.xlsx",
+
+"sda2": r"C:\Users\LazaroMonteiro\Downloads\dashboard\SDA-SIM-E-PVRD-Q00-0148-00 - Índice Data Book UFV - SDA 2.xlsx",
+
+"sda3": r"C:\Users\LazaroMonteiro\Downloads\dashboard\SDA-SIM-E-PVRD-Q00-0148-00 - Índice Data Book UFV - SDA 3.xlsx",
+
+"sda4": r"C:\Users\LazaroMonteiro\Downloads\dashboard\SDA-SIM-E-PVRD-Q00-0148-00 - Índice Data Book UFV - SDA 4.xlsx",
+
+"sda5": r"C:\Users\LazaroMonteiro\Downloads\dashboard\SDA-SIM-E-PVRD-Q00-0148-00 - Índice Data Book UFV - SDA 5.xlsx",
+
+"sda6": r"C:\Users\LazaroMonteiro\Downloads\dashboard\SDA-SIM-E-PVRD-Q00-0148-00 - Índice Data Book UFV - SDA 6.xlsx"
 
 }
 
-# ================= FRONTEND =================
 
-@app.route("/")
-def home():
-    return send_from_directory(".", "index.html")
+# ================= LER PLANILHA =================
 
+def carregar(nome, caminho):
 
-@app.route("/script.js")
-def js():
-    return send_from_directory(".", "script.js")
+    caminho = Path(caminho)
 
-
-@app.route("/style.css")
-def css():
-    return send_from_directory(".", "style.css")
-
-
-# ================= DOWNLOAD EXCEL =================
-
-def baixar_excel(url):
-
-    if not url:
+    if not caminho.exists():
         return None
 
     try:
 
-        sessao = requests.Session()
-        sessao.auth = (USER, PASS)
+        xls = pd.ExcelFile(caminho)
 
-        r = sessao.get(url)
-
-        if r.status_code != 200:
-            print("Erro download:", url)
-            return None
-
-        return BytesIO(r.content)
-
-    except Exception as e:
-
-        print("Erro download:", e)
-        return None
-
-
-# ================= LEITURA =================
-
-def carregar(url):
-
-    arquivo = baixar_excel(url)
-
-    if arquivo is None:
-        return None
-
-    try:
-
-        df = pd.read_excel(
-            arquivo,
-            usecols="B:J",
-            skiprows=6
+        aba = next(
+            (a for a in xls.sheet_names if "MC" in a.upper()),
+            None
         )
 
-        df.columns = df.columns.str.strip()
+        if aba is None:
+            return None
 
-        df = df[df["Item"].astype(str).str.match(r"^\d+\..*")]
+
+        # ================= SE / RMT =================
+
+        if nome in ["se","rmt"]:
+
+            df = pd.read_excel(
+                caminho,
+                sheet_name=aba,
+                usecols="B:I",
+                skiprows=6
+            )
+
+            df.columns = [
+            "Item",
+            "Setor",
+            "Documento",
+            "Peso",
+            "Quantidade total",
+            "Postagem",
+            "Percentual",
+            "Observação"
+            ]
+
+
+        # ================= SDA =================
+
+        else:
+
+            df = pd.read_excel(
+                caminho,
+                sheet_name=aba,
+                usecols="B:J",
+                skiprows=6
+            )
+
+            df.columns = [
+            "Item",
+            "Responsavel",
+            "Setor",
+            "Documento",
+            "Peso",
+            "Quantidade total",
+            "Postagem",
+            "Percentual",
+            "Observação"
+            ]
+
+
+        # ================= LIMPEZA =================
+
+        df["Item"] = df["Item"].astype(str)
+
+        df = df[df["Item"].str.match(r"^\d+(\.\d+)*$", na=False)]
+
+        df = df[~df["Documento"].astype(str).str.upper().str.contains("TOTAL", na=False)]
+
+        df = df[df["Documento"].notna()]
+
+
+        # ================= NUMÉRICO =================
 
         df["Quantidade total"] = pd.to_numeric(
             df["Quantidade total"], errors="coerce"
@@ -100,17 +127,35 @@ def carregar(url):
             df["Postagem"], errors="coerce"
         ).fillna(0)
 
+
         df = df.dropna(subset=["Quantidade total"])
 
         df["Quantidade total"] = df["Quantidade total"].astype(int)
         df["Postagem"] = df["Postagem"].astype(int)
 
+
         return df.reset_index(drop=True)
 
-    except Exception as e:
+    except:
 
-        print("Erro leitura:", e)
         return None
+
+
+# ================= FRONTEND =================
+
+@app.route("/")
+def index():
+    return send_from_directory(BASE_DIR, "index.html")
+
+
+@app.route("/style.css")
+def css():
+    return send_from_directory(BASE_DIR, "style.css")
+
+
+@app.route("/script.js")
+def js():
+    return send_from_directory(BASE_DIR, "script.js")
 
 
 # ================= API =================
@@ -118,108 +163,224 @@ def carregar(url):
 @app.route("/dados")
 def dados():
 
-    sda = request.args.get("sda", "geral")
+    sda = request.args.get("sda","geral")
 
-    dados = {k: carregar(v) for k, v in ARQUIVOS.items()}
-    dados = {k: v for k, v in dados.items() if v is not None}
+    dados_excel = {k: carregar(k,v) for k,v in ARQUIVOS.items()}
 
-    if not dados:
-        return jsonify({
-            "total": 0,
-            "postados": 0,
-            "progresso": 0,
-            "sdas": {},
-            "tabela": []
-        })
-
-    df_geral = pd.concat(dados.values()).reset_index(drop=True)
-
-    # ================= PROGRESSO POR SDA =================
-
-    sdas = {}
-
-    for nome, df in dados.items():
-
-        total = df["Quantidade total"].sum()
-        postados = df["Postagem"].sum()
-
-        porcentagem = round(
-            (postados / total) * 100, 1
-        ) if total > 0 else 0
-
-        sdas[nome] = porcentagem
-
-
-    # ================= BASE ATIVA =================
 
     if sda == "geral":
-        df_base = df_geral
+
+        dfs = [
+            df for df in dados_excel.values()
+            if df is not None and not df.empty
+        ]
+
     else:
-        df_base = dados.get(sda, df_geral)
+
+        df = dados_excel.get(sda)
+
+        dfs = [df] if df is not None else []
 
 
-    # ================= KPI =================
+    if dfs:
+        df_base = pd.concat(dfs, ignore_index=True)
+    else:
+        df_base = pd.DataFrame(columns=["Quantidade total","Postagem"])
+
 
     total = int(df_base["Quantidade total"].sum())
     postados = int(df_base["Postagem"].sum())
 
-    progresso = round(
-        (postados / total) * 100, 1
-    ) if total > 0 else 0
+    progresso = round((postados/total)*100,1) if total>0 else 0
 
 
-    # ================= STATUS =================
+    sdas = {}
 
-    df_status = df_base.copy()
+    for nome,df in dados_excel.items():
 
-    df_status["Status"] = "Finalizado"
+        if df is None or df.empty:
+            sdas[nome] = 0
+            continue
 
-    df_status.loc[df_status["Postagem"] == 0, "Status"] = "Pendente"
+        t = df["Quantidade total"].sum()
+        p = df["Postagem"].sum()
 
-    df_status.loc[
-        (df_status["Postagem"] > 0) &
-        (df_status["Postagem"] < df_status["Quantidade total"]),
-        "Status"
-    ] = "Parcial"
-
-    df_status = df_status[df_status["Status"] != "Finalizado"]
+        sdas[nome] = round((p/t)*100,1) if t>0 else 0
 
 
     tabela = []
 
-    for _, r in df_status.iterrows():
+    if not df_base.empty:
 
-        tabela.append({
+        for _,row in df_base.iterrows():
 
-            "item": str(r["Item"]),
-            "setor": str(r.get("Setor", "")),
-            "documento": str(r.get("Documento", "")),
-            "total": int(r["Quantidade total"]),
-            "postados": int(r["Postagem"]),
-            "comentario": "",
-            "status": str(r["Status"])
+            status = "Pendente"
 
-        })
+            if row["Postagem"] == row["Quantidade total"]:
+                status = "Finalizado"
+
+            elif row["Postagem"] > 0:
+                status = "Parcial"
+
+            if status == "Finalizado":
+                continue
+
+
+            tabela.append({
+
+            "item":str(row["Item"]),
+            "setor":str(row.get("Setor","")),
+            "documento":str(row.get("Documento","")),
+            "total":int(row["Quantidade total"]),
+            "postados":int(row["Postagem"]),
+            "comentario":str(row.get("Observação","")),
+            "status":status
+
+            })
 
 
     return jsonify({
-
-        "total": total,
-        "postados": postados,
-        "progresso": progresso,
-        "sdas": sdas,
-        "tabela": tabela
-
+    "total":total,
+    "postados":postados,
+    "progresso":progresso,
+    "sdas":sdas,
+    "tabela":tabela
     })
+
+
+# ================= PDF =================
+
+@app.route("/baixar-pdf")
+def baixar_pdf():
+
+    caminho = BASE_DIR / "relatorio_databook.pdf"
+
+    elementos = []
+
+    titulo = ParagraphStyle("titulo", fontSize=26, leading=30, spaceAfter=5)
+
+    subtitulo = ParagraphStyle(
+        "sub",
+        fontSize=12,
+        textColor=colors.HexColor("#3c4a5d"),
+        spaceAfter=20
+    )
+
+    texto = ParagraphStyle("texto", fontSize=9, leading=12)
+
+    header = ParagraphStyle(
+        "header",
+        fontSize=10,
+        textColor=colors.white
+    )
+
+    elementos.append(Paragraph("UFV SOL DO AGRESTE - RELATÓRIO DO DATABOOK", titulo))
+
+    elementos.append(
+        Paragraph(
+            f"Controle e postagem de documentos — {datetime.today().strftime('%d/%m/%Y')}",
+            subtitulo
+        )
+    )
+
+    elementos.append(Spacer(1,10))
+
+
+    for chave, arquivo in ARQUIVOS.items():
+
+        df = carregar(chave, arquivo)
+
+        if df is None:
+            continue
+
+        df["Status"] = "Finalizado"
+        df.loc[df["Postagem"] == 0, "Status"] = "Pendente"
+
+        df.loc[
+            (df["Postagem"] > 0) &
+            (df["Postagem"] < df["Quantidade total"]),
+            "Status"
+        ] = "Parcial"
+
+        df = df[df["Status"] != "Finalizado"]
+
+        if df.empty:
+            continue
+
+        df = df.fillna("")
+
+        elementos.append(
+            Paragraph(f"<b>{chave.upper()}</b>", texto)
+        )
+
+        dados = [[
+
+            Paragraph("Item", header),
+            Paragraph("Setor", header),
+            Paragraph("Documento", header),
+            Paragraph("Total", header),
+            Paragraph("Postados", header),
+            Paragraph("Comentários", header),
+            Paragraph("Status", header)
+
+        ]]
+
+        for _, r in df.iterrows():
+
+            dados.append([
+
+                Paragraph(str(r["Item"]), texto),
+                Paragraph(str(r.get("Setor","")), texto),
+                Paragraph(str(r.get("Documento","")), texto),
+                Paragraph(str(r["Quantidade total"]), texto),
+                Paragraph(str(r["Postagem"]), texto),
+                Paragraph(str(r.get("Observação","")), texto),
+                Paragraph(str(r["Status"]), texto)
+
+            ])
+
+        largura_pagina = landscape(A4)[0]
+        largura_util = largura_pagina - 140
+
+        colWidths = [
+
+            largura_util * 0.07,
+            largura_util * 0.12,
+            largura_util * 0.28,
+            largura_util * 0.08,
+            largura_util * 0.10,
+            largura_util * 0.25,
+            largura_util * 0.10
+
+        ]
+
+        tabela = Table(dados, colWidths=colWidths, repeatRows=1)
+
+        tabela.setStyle(TableStyle([
+            ("BACKGROUND",(0,0),(-1,0),colors.HexColor("#2d466f")),
+            ("TEXTCOLOR",(0,0),(-1,0),colors.white),
+            ("GRID",(0,0),(-1,-1),0.25,colors.HexColor("#e3e8f0"))
+        ]))
+
+        elementos.append(tabela)
+        elementos.append(Spacer(1,25))
+
+
+    doc = SimpleDocTemplate(
+        str(caminho),
+        pagesize=landscape(A4),
+        leftMargin=70,
+        rightMargin=70,
+        topMargin=60,
+        bottomMargin=50
+    )
+
+    doc.build(elementos)
+
+    return send_from_directory(BASE_DIR,"relatorio_databook.pdf",as_attachment=True)
 
 
 # ================= START =================
 
 if __name__ == "__main__":
-
-    port = int(os.environ.get("PORT", 10000))
-
-    app.run(
-        host="0.0.0.0",
-        port=port
-    )
+    app.run(debug=True)
